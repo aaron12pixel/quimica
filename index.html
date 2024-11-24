@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Equilibrio Químico</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f2f5;
+        }
+
+        .calculator {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .grid-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .concentrations-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .results.visible {
+            display: block;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .error {
+            color: #dc3545;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8d7da;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .species-label {
+            font-size: 0.8em;
+            color: #666;
+            text-align: center;
+            margin-bottom: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="calculator">
+        <h1>Calculadora de Equilibrio Químico</h1>
+        <p>Reacción: A + B ⇌ C + D</p>
+
+        <div class="grid-inputs">
+            <div class="input-group">
+                <label for="temperatura">Temperatura (K)</label>
+                <input type="number" id="temperatura" value="298.15" step="0.01">
+            </div>
+            <div class="input-group">
+                <label for="presion">Presión (atm)</label>
+                <input type="number" id="presion" value="1.0" step="0.1">
+            </div>
+            <div class="input-group">
+                <label for="keq">Constante de Equilibrio (K)</label>
+                <input type="number" id="keq" value="1.0" step="0.1">
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label>Concentraciones Iniciales (mol/L)</label>
+            <div class="concentrations-grid">
+                <div>
+                    <div class="species-label">[A]₀</div>
+                    <input type="number" id="concA" value="1.0" step="0.1">
+                </div>
+                <div>
+                    <div class="species-label">[B]₀</div>
+                    <input type="number" id="concB" value="1.0" step="0.1">
+                </div>
+                <div>
+                    <div class="species-label">[C]₀</div>
+                    <input type="number" id="concC" value="0.0" step="0.1">
+                </div>
+                <div>
+                    <div class="species-label">[D]₀</div>
+                    <input type="number" id="concD" value="0.0" step="0.1">
+                </div>
+            </div>
+        </div>
+
+        <button onclick="calculateEquilibrium()">Calcular Equilibrio</button>
+
+        <div id="error" class="error"></div>
+
+        <div id="results" class="results">
+            <h3>Resultados:</h3>
+            <div class="results-grid">
+                <div>
+                    <div class="species-label">[A]eq</div>
+                    <div id="resultA">-</div>
+                </div>
+                <div>
+                    <div class="species-label">[B]eq</div>
+                    <div id="resultB">-</div>
+                </div>
+                <div>
+                    <div class="species-label">[C]eq</div>
+                    <div id="resultC">-</div>
+                </div>
+                <div>
+                    <div class="species-label">[D]eq</div>
+                    <div id="resultD">-</div>
+                </div>
+            </div>
+            <div style="margin-top: 15px">
+                <div>Avance de reacción: <span id="avance">-</span></div>
+                <div>Iteraciones: <span id="iteraciones">-</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function calculateEquilibrium() {
+            // Obtener valores de entrada
+            const keq = parseFloat(document.getElementById('keq').value);
+            const initialConc = [
+                parseFloat(document.getElementById('concA').value),
+                parseFloat(document.getElementById('concB').value),
+                parseFloat(document.getElementById('concC').value),
+                parseFloat(document.getElementById('concD').value)
+            ];
+
+            try {
+                // Validaciones
+                if (keq <= 0) {
+                    throw new Error('La constante de equilibrio debe ser positiva');
+                }
+
+                // Método de Newton-Raphson para encontrar el equilibrio
+                const coeficientes = [1, 1, 1, 1]; // A + B ⇌ C + D
+                let x = 0.1; // Aproximación inicial
+                const maxIterations = 100;
+                const tolerance = 1e-6;
+                let iteration = 0;
+
+                while (iteration < maxIterations) {
+                    // Calcular concentraciones actuales
+                    const conc = initialConc.map((c, i) => c + coeficientes[i] * x);
+                    const [A, B, C, D] = conc;
+
+                    // Función Q - K = 0
+                    const f = (C * D) / (A * B) - keq;
+
+                    // Derivada de la función
+                    const df = ((coeficientes[2] * D + coeficientes[3] * C) * (A * B) -
+                              (C * D) * (coeficientes[0] * B + coeficientes[1] * A)) / 
+                              Math.pow(A * B, 2);
+
+                    const dx = f / df;
+                    x = x - dx;
+
+                    if (Math.abs(dx) < tolerance) {
+                        // Mostrar resultados
+                        document.getElementById('resultA').textContent = (initialConc[0] + coeficientes[0] * x).toFixed(4);
+                        document.getElementById('resultB').textContent = (initialConc[1] + coeficientes[1] * x).toFixed(4);
+                        document.getElementById('resultC').textContent = (initialConc[2] + coeficientes[2] * x).toFixed(4);
+                        document.getElementById('resultD').textContent = (initialConc[3] + coeficientes[3] * x).toFixed(4);
+                        document.getElementById('avance').textContent = x.toFixed(4);
+                        document.getElementById('iteraciones').textContent = iteration + 1;
+                        
+                        document.getElementById('results').classList.add('visible');
+                        document.getElementById('error').style.display = 'none';
+                        return;
+                    }
+
+                    iteration++;
+                }
+
+                throw new Error('No se alcanzó la convergencia');
+
+            } catch (err) {
+                document.getElementById('error').textContent = err.message;
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('results').classList.remove('visible');
+            }
+        }
+    </script>
+</body>
+</html>
